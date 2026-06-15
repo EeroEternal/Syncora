@@ -41,6 +41,11 @@ pub fn run(conn: &Connection) -> Result<(), AppError> {
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS auth (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         "
     )?;
     Ok(())

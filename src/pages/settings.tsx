@@ -1,47 +1,36 @@
 import { createResource, createSignal } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Badge } from "~/components/ui/badge";
-import { getSettings, saveSettings, testR2Connection } from "~/lib/tauri";
-import type { Settings as SettingsType } from "~/lib/tauri";
+import { getSettings, saveSettings, getAuthStatus, logout } from "~/lib/tauri";
+import type { Settings as SettingsType, AuthStatus } from "~/lib/tauri";
+import { LogOut, Save } from "lucide-solid";
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [settings, { refetch }] = createResource(getSettings);
+  const [authStatus] = createResource<AuthStatus>(getAuthStatus);
   const [saving, setSaving] = createSignal(false);
-  const [testing, setTesting] = createSignal(false);
-  const [testResult, setTestResult] = createSignal<{ success: boolean; message: string } | null>(null);
 
-  // Local form state
-  const [endpoint, setEndpoint] = createSignal("");
-  const [accessKey, setAccessKey] = createSignal("");
-  const [secret, setSecret] = createSignal("");
-  const [bucket, setBucket] = createSignal("");
+  const [apiUrl, setApiUrl] = createSignal("");
   const [interval, setInterval] = createSignal(5);
 
-  // Initialize form when settings load
   const initForm = () => {
     const s = settings();
     if (s) {
-      setEndpoint(s.r2_endpoint || "");
-      setAccessKey(s.r2_access_key || "");
-      setSecret(s.r2_secret || "");
-      setBucket(s.r2_bucket || "");
+      setApiUrl(s.api_base_url || "https://api.synchora.cc");
       setInterval(s.sync_interval_minutes || 5);
     }
   };
 
-  // Watch for settings load
   createResource(() => settings(), initForm);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await saveSettings({
-        r2_endpoint: endpoint(),
-        r2_access_key: accessKey(),
-        r2_secret: secret(),
-        r2_bucket: bucket(),
+        api_base_url: apiUrl(),
         sync_interval_minutes: interval(),
         auto_start: false,
       });
@@ -51,77 +40,70 @@ export default function Settings() {
     }
   };
 
-  const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
+  const handleLogout = async () => {
     try {
-      const result = await testR2Connection();
-      setTestResult(result);
-    } catch (e: any) {
-      setTestResult({ success: false, message: e.toString() });
-    } finally {
-      setTesting(false);
+      await logout();
+      navigate("/login");
+    } catch (e) {
+      console.error("Logout failed:", e);
     }
   };
 
   return (
     <div class="space-y-6">
       <div>
-        <h1 class="text-2xl font-bold">Settings</h1>
-        <p class="text-sm text-[hsl(var(--muted-foreground))]">
-          Configure your Cloudflare R2 connection and sync preferences
+        <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Settings</h1>
+        <p class="text-sm text-zinc-500">
+          Manage your account and sync preferences
         </p>
       </div>
 
-      {/* R2 Configuration */}
+      {/* Account */}
       <Card>
         <CardHeader>
-          <CardTitle>Cloudflare R2 Connection</CardTitle>
-          <CardDescription>
-            Enter your R2 credentials to enable file synchronization
-          </CardDescription>
+          <CardTitle>Account</CardTitle>
+          <CardDescription>Your Syncora account information</CardDescription>
         </CardHeader>
-        <CardContent class="space-y-4">
-          <Input
-            label="R2 Endpoint"
-            placeholder="https://xxx.r2.cloudflarestorage.com"
-            value={endpoint()}
-            onInput={(e) => setEndpoint(e.currentTarget.value)}
-          />
-          <Input
-            label="Bucket Name"
-            placeholder="my-sync-bucket"
-            value={bucket()}
-            onInput={(e) => setBucket(e.currentTarget.value)}
-          />
-          <Input
-            label="Access Key ID"
-            placeholder="Enter your access key"
-            value={accessKey()}
-            onInput={(e) => setAccessKey(e.currentTarget.value)}
-          />
-          <Input
-            label="Secret Access Key"
-            type="password"
-            placeholder="Enter your secret key"
-            value={secret()}
-            onInput={(e) => setSecret(e.currentTarget.value)}
-          />
-
-          <div class="flex items-center gap-3 pt-2">
-            <Button variant="outline" onClick={handleTest} disabled={testing()}>
-              {testing() ? "Testing..." : "Test Connection"}
-            </Button>
-            {testResult() && (
-              <Badge variant={testResult()!.success ? "success" : "destructive"}>
-                {testResult()!.message}
-              </Badge>
-            )}
-          </div>
+        <CardContent>
+          {authStatus()?.logged_in ? (
+            <div class="space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  Email
+                </span>
+                <span class="text-sm text-zinc-900">
+                  {authStatus()?.user?.email}
+                </span>
+              </div>
+              {authStatus()?.user?.display_name && (
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Name
+                  </span>
+                  <span class="text-sm text-zinc-900">
+                    {authStatus()?.user?.display_name}
+                  </span>
+                </div>
+              )}
+              <div class="pt-2">
+                <Button variant="secondary" size="sm" onClick={handleLogout}>
+                  <LogOut class="w-3.5 h-3.5" />
+                  Sign Out
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div class="space-y-3">
+              <p class="text-sm text-zinc-500">Not signed in</p>
+              <Button variant="primary" size="sm" onClick={() => navigate("/login")}>
+                Sign In
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Sync Settings */}
+      {/* Sync Preferences */}
       <Card>
         <CardHeader>
           <CardTitle>Sync Preferences</CardTitle>
@@ -138,12 +120,31 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      {/* Advanced */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Advanced</CardTitle>
+          <CardDescription>API server configuration</CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <Input
+            label="API Base URL"
+            placeholder="https://api.synchora.cc"
+            value={apiUrl()}
+            class="font-mono"
+            onInput={(e) => setApiUrl(e.currentTarget.value)}
+          />
+        </CardContent>
+      </Card>
+
       {/* Save */}
       <div class="flex justify-end">
-        <Button onClick={handleSave} disabled={saving()}>
+        <Button variant="primary" size="sm" onClick={handleSave} loading={saving()} class="min-w-[140px]">
+          <Save class="w-3.5 h-3.5" />
           {saving() ? "Saving..." : "Save Settings"}
         </Button>
       </div>
     </div>
   );
 }
+

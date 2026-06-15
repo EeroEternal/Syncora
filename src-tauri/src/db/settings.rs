@@ -4,10 +4,7 @@ use crate::error::AppError;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
-    pub r2_endpoint: String,
-    pub r2_access_key: String,
-    pub r2_secret: String,
-    pub r2_bucket: String,
+    pub api_base_url: String,
     pub sync_interval_minutes: i64,
     pub auto_start: bool,
 }
@@ -15,10 +12,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            r2_endpoint: String::new(),
-            r2_access_key: String::new(),
-            r2_secret: String::new(),
-            r2_bucket: String::new(),
+            api_base_url: "https://api.synchora.cc".to_string(),
             sync_interval_minutes: 5,
             auto_start: false,
         }
@@ -36,10 +30,7 @@ pub fn get(conn: &Connection) -> Result<Settings, AppError> {
     for row in rows {
         let (key, value) = row?;
         match key.as_str() {
-            "r2_endpoint" => settings.r2_endpoint = value,
-            "r2_access_key" => settings.r2_access_key = value,
-            "r2_secret" => settings.r2_secret = value,
-            "r2_bucket" => settings.r2_bucket = value,
+            "api_base_url" => settings.api_base_url = value,
             "sync_interval_minutes" => settings.sync_interval_minutes = value.parse().unwrap_or(5),
             "auto_start" => settings.auto_start = value == "true",
             _ => {}
@@ -52,10 +43,7 @@ pub fn get(conn: &Connection) -> Result<Settings, AppError> {
 pub fn save(conn: &Connection, settings: &Settings) -> Result<(), AppError> {
     let interval_str = settings.sync_interval_minutes.to_string();
     let pairs: Vec<(&str, &str)> = vec![
-        ("r2_endpoint", settings.r2_endpoint.as_str()),
-        ("r2_access_key", settings.r2_access_key.as_str()),
-        ("r2_secret", settings.r2_secret.as_str()),
-        ("r2_bucket", settings.r2_bucket.as_str()),
+        ("api_base_url", settings.api_base_url.as_str()),
         ("sync_interval_minutes", &interval_str),
         ("auto_start", if settings.auto_start { "true" } else { "false" }),
     ];

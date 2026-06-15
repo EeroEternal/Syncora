@@ -10,7 +10,7 @@ export function Card(props: CardProps) {
   return (
     <div
       class={cn(
-        "rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))] shadow-sm",
+        "bg-white border border-zinc-200 rounded-lg shadow-sm",
         local.class
       )}
       {...rest}
@@ -32,7 +32,10 @@ export function CardHeader(props: CardProps) {
 export function CardTitle(props: CardProps) {
   const [local, rest] = splitProps(props, ["class", "children"]);
   return (
-    <h3 class={cn("text-lg font-semibold leading-none tracking-tight", local.class)} {...rest}>
+    <h3
+      class={cn("text-lg font-semibold leading-none tracking-tight text-zinc-900", local.class)}
+      {...rest}
+    >
       {local.children}
     </h3>
   );
@@ -41,7 +44,7 @@ export function CardTitle(props: CardProps) {
 export function CardDescription(props: CardProps) {
   const [local, rest] = splitProps(props, ["class", "children"]);
   return (
-    <p class={cn("text-sm text-[hsl(var(--muted-foreground))]", local.class)} {...rest}>
+    <p class={cn("text-sm text-zinc-500", local.class)} {...rest}>
       {local.children}
     </p>
   );

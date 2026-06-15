@@ -1,8 +1,10 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager,
+    Manager,
 };
+
+use crate::state::AppState;
 
 pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let open_i = MenuItem::with_id(app, "open", "Open Syncora", true, None::<&str>)?;
@@ -23,7 +25,8 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             "sync_all" => {
-                let _ = app.emit("tray-sync-all", ());
+                let state = app.state::<AppState>();
+                state.sync_notify.notify_one();
             }
             "quit" => {
                 app.exit(0);

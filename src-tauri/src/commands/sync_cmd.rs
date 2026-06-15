@@ -1,40 +1,46 @@
+use std::sync::atomic::Ordering;
+use std::path::PathBuf;
 use tauri::{Emitter, Manager, State};
 use crate::error::AppError;
 use crate::state::AppState;
 use crate::sync;
 
 #[tauri::command]
-pub fn trigger_sync(
+pub async fn trigger_sync(
     app_handle: tauri::AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
     folder_id: String,
 ) -> Result<(), AppError> {
     // Check if sync is already in progress for this folder
     {
-        let locks = state.sync_locks.lock().unwrap();
-        if locks.get(&folder_id).copied().unwrap_or(false) {
+        let map = state.active_syncs.lock().unwrap();
+        if map.contains_key(&folder_id) {
             return Err(AppError::SyncInProgress(folder_id));
         }
-    }
-
-    // Set lock
-    {
-        let mut locks = state.sync_locks.lock().unwrap();
-        locks.insert(folder_id.clone(), true);
     }
 
     let app_data_dir = app_handle.path()
         .app_data_dir()
         .map_err(|e| AppError::General(e.to_string()))?;
 
-    let conn = state.db.lock().unwrap();
-    let result = sync::sync_folder(&conn, &app_data_dir, &folder_id);
+    let db = state.db.clone();
+    let active_syncs = state.active_syncs.clone();
+    let api_base_url = state.api_base_url.clone();
+    let app_handle_clone = app_handle.clone();
+    let fid = folder_id.clone();
 
-    // Release lock
-    {
-        let mut locks = state.sync_locks.lock().unwrap();
-        locks.insert(folder_id.clone(), false);
-    }
+    let result = tokio::task::spawn_blocking(move || {
+        sync::sync_folder(
+            &app_handle_clone,
+            &active_syncs,
+            &db,
+            &app_data_dir,
+            &api_base_url,
+            &fid,
+        )
+    })
+    .await
+    .map_err(|e| AppError::General(e.to_string()))?;
 
     // Emit event for frontend
     let _ = app_handle.emit("sync-status-changed", &folder_id);
@@ -43,39 +49,119 @@ pub fn trigger_sync(
 }
 
 #[tauri::command]
-pub fn trigger_sync_all(
+pub async fn trigger_sync_all(
     app_handle: tauri::AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let app_data_dir = app_handle.path()
+    let app_data_dir: PathBuf = app_handle.path()
         .app_data_dir()
         .map_err(|e| AppError::General(e.to_string()))?;
 
-    let conn = state.db.lock().unwrap();
-    let folders = crate::db::folders::list_all(&conn)?;
+    let db = state.db.clone();
+    let active_syncs = state.active_syncs.clone();
+    let api_url = state.api_base_url.clone();
+    let app_handle_clone = app_handle.clone();
 
-    for folder in folders {
-        if folder.is_enabled && folder.mode != "cloud_only" {
-            let _ = sync::sync_folder(&conn, &app_data_dir, &folder.id);
+    tokio::task::spawn_blocking(move || {
+        let folders = {
+            let conn = db.lock().unwrap();
+            crate::db::folders::list_all(&conn)?
+        };
+
+        for folder in folders {
+            if folder.is_enabled && folder.mode != "cloud_only" {
+                // Dedup: if already running for this folder, skip
+                let already_running = {
+                    let map = active_syncs.lock().unwrap();
+                    map.contains_key(&folder.id)
+                };
+                if already_running {
+                    continue;
+                }
+                let _ = sync::sync_folder(
+                    &app_handle_clone,
+                    &active_syncs,
+                    &db,
+                    &app_data_dir,
+                    &api_url,
+                    &folder.id,
+                );
+            }
         }
-    }
+        Ok::<(), AppError>(())
+    })
+    .await
+    .map_err(|e| AppError::General(e.to_string()))??;
 
     let _ = app_handle.emit("sync-status-changed", "all");
     Ok(())
 }
 
+/// Cancel a running sync for a given folder_id.
+/// Sets the cancel flag and immediately attempts to kill the rclone subprocess.
 #[tauri::command]
-pub fn release_folder(
-    app_handle: tauri::AppHandle,
-    state: State<AppState>,
+pub async fn cancel_sync(
+    state: State<'_, AppState>,
     folder_id: String,
 ) -> Result<(), AppError> {
-    let app_data_dir = app_handle.path()
+    let (cancel_flag, child) = {
+        let map = state.active_syncs.lock().unwrap();
+        match map.get(&folder_id) {
+            Some(rs) => (rs.cancel_requested.clone(), rs.child.clone()),
+            None => {
+                return Err(AppError::General(format!(
+                    "No active sync for folder {}", folder_id
+                )));
+            }
+        }
+    };
+
+    // Signal the running task to stop
+    cancel_flag.store(true, Ordering::SeqCst);
+    // Also attempt to kill the child directly for faster termination
+    {
+        let mut child_guard = child.lock().unwrap();
+        if let Err(e) = child_guard.kill() {
+            // InvalidInput just means the child already exited — ignore
+            if e.kind() != std::io::ErrorKind::InvalidInput {
+                log::warn!("Failed to kill rclone subprocess for {}: {}", folder_id, e);
+            }
+        }
+    }
+
+    log::info!("Cancel requested for folder {}", folder_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn release_folder(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    folder_id: String,
+) -> Result<(), AppError> {
+    let app_data_dir: PathBuf = app_handle.path()
         .app_data_dir()
         .map_err(|e| AppError::General(e.to_string()))?;
 
-    let conn = state.db.lock().unwrap();
-    sync::release::release_folder(&conn, &app_data_dir, &folder_id)?;
+    let db = state.db.clone();
+    let active_syncs = state.active_syncs.clone();
+    let api_base_url = state.api_base_url.clone();
+    let app_handle_clone = app_handle.clone();
+    let fid = folder_id.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let conn = db.lock().unwrap();
+        sync::release::release_folder(
+            &app_handle_clone,
+            &active_syncs,
+            &conn,
+            &app_data_dir,
+            &api_base_url,
+            &fid,
+        )
+    })
+    .await
+    .map_err(|e| AppError::General(e.to_string()))??;
 
     let _ = app_handle.emit("sync-status-changed", &folder_id);
     Ok(())

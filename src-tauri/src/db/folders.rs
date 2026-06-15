@@ -96,3 +96,13 @@ pub fn delete(conn: &Connection, id: &str) -> Result<(), AppError> {
     conn.execute("DELETE FROM folders WHERE id = ?1", params![id])?;
     Ok(())
 }
+
+/// Check if a folder with the given local_path already exists.
+pub fn exists_by_local_path(conn: &Connection, local_path: &str) -> Result<bool, AppError> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM folders WHERE local_path = ?1",
+        params![local_path],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}

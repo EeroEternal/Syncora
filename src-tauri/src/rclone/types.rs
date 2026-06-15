@@ -5,6 +5,8 @@ pub struct SyncResult {
     pub success: bool,
     pub files_transferred: u32,
     pub files_deleted: u32,
+    /// Individual file paths that were copied/updated/deleted during this sync
+    pub transferred_paths: Vec<String>,
     pub errors: Vec<String>,
     pub conflicts: Vec<ConflictInfo>,
     pub duration_ms: u64,

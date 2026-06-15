@@ -2,26 +2,25 @@ import { type ParentProps, splitProps } from "solid-js";
 import { cn } from "~/lib/utils";
 
 interface BadgeProps extends ParentProps {
-  variant?: "default" | "success" | "warning" | "destructive" | "outline" | "conflict";
+  variant?: "default" | "success" | "warning" | "error" | "outline";
   class?: string;
 }
+
+const variants: Record<string, string> = {
+  default: "bg-zinc-100 text-zinc-700",
+  success: "bg-emerald-50 text-emerald-700",
+  warning: "bg-amber-50 text-amber-700",
+  error: "bg-red-50 text-red-700",
+  outline: "border border-zinc-300 text-zinc-600",
+};
 
 export function Badge(props: BadgeProps) {
   const [local, rest] = splitProps(props, ["variant", "class", "children"]);
 
-  const variants: Record<string, string> = {
-    default: "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]",
-    success: "bg-[hsl(var(--success))] text-white",
-    warning: "bg-[hsl(var(--warning))] text-white",
-    destructive: "bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))]",
-    outline: "border border-[hsl(var(--border))] text-[hsl(var(--foreground))]",
-    conflict: "bg-[hsl(var(--conflict))] text-white",
-  };
-
   return (
     <span
       class={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors",
+        "inline-flex items-center gap-1 min-w-[5rem] h-5 text-xs font-medium rounded-full px-2 justify-center",
         variants[local.variant || "default"],
         local.class
       )}

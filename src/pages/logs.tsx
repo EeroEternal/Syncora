@@ -1,8 +1,17 @@
 import { createResource, createSignal, Show, For } from "solid-js";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { getLogs } from "~/lib/tauri";
 import { formatDate, formatDuration } from "~/lib/utils";
+import { FileText } from "lucide-solid";
+import {
+  tableShellClass,
+  tableHeadRowClass,
+  tableBodyDivideClass,
+  tableBodyRowClass,
+  tableHeadCellClass,
+  tableBodyCellClass,
+  emptyStateClass,
+} from "~/lib/tokens";
 
 export default function Logs() {
   const [limit, setLimit] = createSignal(50);
@@ -11,79 +20,67 @@ export default function Logs() {
   return (
     <div class="space-y-6">
       <div>
-        <h1 class="text-2xl font-bold">Sync Logs</h1>
-        <p class="text-sm text-[hsl(var(--muted-foreground))]">
-          History of all sync operations
-        </p>
+        <h1 class="text-2xl font-bold tracking-tight text-zinc-900">
+          Sync Logs
+        </h1>
+        <p class="text-sm text-zinc-500">History of all sync operations</p>
       </div>
 
-      <Card>
-        <CardContent class="p-0">
-          <Show
-            when={logs() && logs()!.length > 0}
-            fallback={
-              <div class="py-12 text-center">
-                <p class="text-[hsl(var(--muted-foreground))]">No logs yet</p>
-              </div>
-            }
-          >
-            <div class="overflow-auto">
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="border-b border-[hsl(var(--border))]">
-                    <th class="px-4 py-3 text-left font-medium text-[hsl(var(--muted-foreground))]">
-                      Time
-                    </th>
-                    <th class="px-4 py-3 text-left font-medium text-[hsl(var(--muted-foreground))]">
-                      Action
-                    </th>
-                    <th class="px-4 py-3 text-left font-medium text-[hsl(var(--muted-foreground))]">
-                      Status
-                    </th>
-                    <th class="px-4 py-3 text-left font-medium text-[hsl(var(--muted-foreground))]">
-                      Message
-                    </th>
-                    <th class="px-4 py-3 text-left font-medium text-[hsl(var(--muted-foreground))]">
-                      Duration
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={logs()}>
-                    {(log) => (
-                      <tr class="border-b border-[hsl(var(--border))] last:border-0">
-                        <td class="px-4 py-3 text-xs text-[hsl(var(--muted-foreground))]">
-                          {formatDate(log.timestamp)}
-                        </td>
-                        <td class="px-4 py-3">{log.action}</td>
-                        <td class="px-4 py-3">
-                          <Badge
-                            variant={
-                              log.status === "success"
-                                ? "success"
-                                : log.status === "error"
-                                ? "destructive"
-                                : "warning"
-                            }
-                          >
-                            {log.status}
-                          </Badge>
-                        </td>
-                        <td class="px-4 py-3 text-xs max-w-xs truncate">
-                          {log.message || "—"}
-                        </td>
-                        <td class="px-4 py-3 text-xs">
-                          {log.duration_ms ? formatDuration(log.duration_ms) : "—"}
-                        </td>
-                      </tr>
-                    )}
-                  </For>
-                </tbody>
-              </table>
+      {/* Table */}
+      <div class={tableShellClass}>
+        <Show
+          when={logs() && logs()!.length > 0}
+          fallback={
+            <div class={emptyStateClass}>
+              <FileText class="w-8 h-8 text-zinc-400 mb-3" />
+              <p class="text-sm text-zinc-500">No logs yet</p>
             </div>
-          </Show>
-        </CardContent>
-      </Card>
+          }
+        >
+          <table class="w-full">
+            <thead>
+              <tr class={tableHeadRowClass}>
+                <th class={tableHeadCellClass}>Time</th>
+                <th class={tableHeadCellClass}>Action</th>
+                <th class={tableHeadCellClass}>Status</th>
+                <th class={tableHeadCellClass}>Message</th>
+                <th class={tableHeadCellClass}>Duration</th>
+              </tr>
+            </thead>
+            <tbody class={tableBodyDivideClass}>
+              <For each={logs()}>
+                {(log) => (
+                  <tr class={tableBodyRowClass}>
+                    <td class={`${tableBodyCellClass} text-xs text-zinc-500`}>
+                      {formatDate(log.timestamp)}
+                    </td>
+                    <td class={tableBodyCellClass}>{log.action}</td>
+                    <td class={tableBodyCellClass}>
+                      <Badge
+                        variant={
+                          log.status === "success"
+                            ? "success"
+                            : log.status === "error"
+                            ? "error"
+                            : "warning"
+                        }
+                      >
+                        {log.status}
+                      </Badge>
+                    </td>
+                    <td class={`${tableBodyCellClass} text-xs max-w-xs truncate`}>
+                      {log.message || "—"}
+                    </td>
+                    <td class={`${tableBodyCellClass} text-xs font-mono`}>
+                      {log.duration_ms ? formatDuration(log.duration_ms) : "—"}
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </tbody>
+          </table>
+        </Show>
+      </div>
     </div>
   );
 }

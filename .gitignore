@@ -6,6 +6,9 @@ node_modules/
 dist/
 target/
 
+# Cloudflare Workers
+.wrangler/
+
 # Tauri generated
 src-tauri/gen/
 

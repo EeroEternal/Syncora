@@ -34,18 +34,37 @@ export interface SyncLog {
 }
 
 export interface Settings {
-  r2_endpoint: string;
-  r2_access_key: string;
-  r2_secret: string;
-  r2_bucket: string;
+  api_base_url: string;
   sync_interval_minutes: number;
   auto_start: boolean;
 }
 
-export interface SyncStatus {
-  folder_id: string;
-  status: string;
-  progress: number | null;
+export interface UserInfo {
+  id: string;
+  email: string;
+  display_name: string | null;
+}
+
+export interface AuthStatus {
+  logged_in: boolean;
+  user: UserInfo | null;
+}
+
+// Auth commands
+export async function register(email: string, password: string): Promise<UserInfo> {
+  return invoke("register", { email, password });
+}
+
+export async function login(email: string, password: string): Promise<UserInfo> {
+  return invoke("login", { email, password });
+}
+
+export async function logout(): Promise<void> {
+  return invoke("logout");
+}
+
+export async function getAuthStatus(): Promise<AuthStatus> {
+  return invoke("get_auth_status");
 }
 
 // Settings commands
@@ -57,17 +76,13 @@ export async function saveSettings(settings: Settings): Promise<void> {
   return invoke("save_settings", { settings });
 }
 
-export async function testR2Connection(): Promise<{ success: boolean; message: string }> {
-  return invoke("test_r2_connection");
-}
-
 // Folder commands
 export async function listFolders(): Promise<Folder[]> {
   return invoke("list_folders");
 }
 
-export async function addFolder(localPath: string, remotePrefix: string): Promise<Folder> {
-  return invoke("add_folder", { localPath, remotePrefix });
+export async function addFolder(localPath: string, mode?: "create" | "connect" | "replace"): Promise<Folder> {
+  return invoke("add_folder", { localPath, mode });
 }
 
 export async function deleteFolder(id: string): Promise<void> {
@@ -81,6 +96,10 @@ export async function triggerSync(folderId: string): Promise<void> {
 
 export async function triggerSyncAll(): Promise<void> {
   return invoke("trigger_sync_all");
+}
+
+export async function cancelSync(folderId: string): Promise<void> {
+  return invoke("cancel_sync", { folderId });
 }
 
 // Conflict commands

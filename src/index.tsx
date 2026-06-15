@@ -7,18 +7,22 @@ import Folders from "./pages/folders";
 import Conflicts from "./pages/conflicts";
 import Logs from "./pages/logs";
 import Settings from "./pages/settings";
+import Login from "./pages/login";
 import "./index.css";
 
 const root = document.getElementById("root");
 
 render(
   () => (
-    <Router root={App}>
-      <Route path="/" component={Dashboard} />
-      <Route path="/folders" component={Folders} />
-      <Route path="/conflicts" component={Conflicts} />
-      <Route path="/logs" component={Logs} />
-      <Route path="/settings" component={Settings} />
+    <Router>
+      <Route path="/login" component={Login} />
+      <Route path="/" component={App}>
+        <Route path="/" component={Dashboard} />
+        <Route path="/folders" component={Folders} />
+        <Route path="/conflicts" component={Conflicts} />
+        <Route path="/logs" component={Logs} />
+        <Route path="/settings" component={Settings} />
+      </Route>
     </Router>
   ),
   root!

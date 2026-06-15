@@ -20,6 +20,12 @@ pub enum AppError {
     #[error("Sync in progress for folder: {0}")]
     SyncInProgress(String),
 
+    #[error("Authentication error: {0}")]
+    Auth(String),
+
+    #[error("API error: {0}")]
+    Api(String),
+
     #[error("{0}")]
     General(String),
 }
