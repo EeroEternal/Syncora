@@ -1,5 +1,5 @@
 import { A, useLocation, useNavigate } from "@solidjs/router";
-import { createResource } from "solid-js";
+import { createResource, createEffect } from "solid-js";
 import { cn } from "~/lib/utils";
 import { getAuthStatus } from "~/lib/tauri";
 import {
@@ -22,6 +22,16 @@ export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [authStatus] = createResource(getAuthStatus);
+
+  // Redirect to login if session is expired / not logged in.
+  // get_auth_status now proactively validates the token, so if it
+  // returns logged_in: false the session is truly gone.
+  createEffect(() => {
+    const status = authStatus();
+    if (status && !status.logged_in) {
+      navigate("/login");
+    }
+  });
 
   return (
     <aside class="flex h-full w-56 flex-col border-r border-zinc-200 bg-white">

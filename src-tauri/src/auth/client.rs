@@ -500,9 +500,16 @@ pub fn ensure_fresh_token(
 
     let pair = match refresh_token(base_url, &tokens.refresh_token) {
         Ok(p) => p,
-        Err(e) => {
-            log::warn!("Token refresh failed: {}", e);
+        Err(AppError::Api(ref msg)) if msg.contains("401") || msg.contains("Invalid or expired") => {
+            // Refresh token is genuinely invalid/revoked — user must sign in again.
+            log::warn!("Refresh token rejected by server (401), clearing session");
             return Err(AppError::Auth("Session expired, please sign in again".into()));
+        }
+        Err(e) => {
+            // Network error or transient failure — keep existing tokens, let the
+            // caller retry later. Don't kick the user out for connectivity issues.
+            log::warn!("Token refresh failed (network/transient), reusing existing token: {}", e);
+            return Ok(Some(tokens));
         }
     };
 

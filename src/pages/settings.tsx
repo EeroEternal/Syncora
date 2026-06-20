@@ -15,12 +15,14 @@ export default function Settings() {
 
   const [apiUrl, setApiUrl] = createSignal("");
   const [interval, setInterval] = createSignal(5);
+  const [autoStart, setAutoStart] = createSignal(false);
 
   const initForm = () => {
     const s = settings();
     if (s) {
       setApiUrl(s.api_base_url || "https://api.synchora.cc");
       setInterval(s.sync_interval_minutes || 5);
+      setAutoStart(s.auto_start ?? false);
     }
   };
 
@@ -32,7 +34,7 @@ export default function Settings() {
       await saveSettings({
         api_base_url: apiUrl(),
         sync_interval_minutes: interval(),
-        auto_start: false,
+        auto_start: autoStart(),
       });
       refetch();
     } finally {
@@ -117,6 +119,40 @@ export default function Settings() {
             value={interval()}
             onInput={(e) => setInterval(parseInt(e.currentTarget.value) || 5)}
           />
+        </CardContent>
+      </Card>
+
+      {/* Application */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Application</CardTitle>
+          <CardDescription>App behavior preferences</CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="space-y-0.5">
+              <p class="text-sm font-medium text-zinc-900">Launch at Login</p>
+              <p class="text-xs text-zinc-500">Start Syncora automatically when you log in</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoStart()}
+              onClick={() => setAutoStart(!autoStart())}
+              class={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${autoStart() ? 'bg-zinc-900' : 'bg-zinc-200'}`}
+            >
+              <span
+                class={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out ${autoStart() ? 'translate-x-4' : 'translate-x-0'}`}
+              />
+            </button>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="space-y-0.5">
+              <p class="text-sm font-medium text-zinc-900">Close to Tray</p>
+              <p class="text-xs text-zinc-500">Keep running in the background when the window is closed</p>
+            </div>
+            <span class="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">Always on</span>
+          </div>
         </CardContent>
       </Card>
 

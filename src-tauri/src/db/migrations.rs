@@ -13,7 +13,7 @@ pub fn run(conn: &Connection) -> Result<(), AppError> {
             status TEXT NOT NULL DEFAULT 'idle' CHECK(status IN ('idle','syncing','synced','error','released')),
             is_enabled INTEGER NOT NULL DEFAULT 1,
             needs_resync INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         );
 
         CREATE TABLE IF NOT EXISTS conflicts (
@@ -22,7 +22,7 @@ pub fn run(conn: &Connection) -> Result<(), AppError> {
             file_path TEXT NOT NULL,
             local_version TEXT,
             remote_version TEXT,
-            detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+            detected_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
             resolved INTEGER NOT NULL DEFAULT 0,
             resolution TEXT CHECK(resolution IN ('keep_local','keep_remote','keep_both'))
         );
@@ -30,7 +30,7 @@ pub fn run(conn: &Connection) -> Result<(), AppError> {
         CREATE TABLE IF NOT EXISTS sync_logs (
             id TEXT PRIMARY KEY,
             folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-            timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+            timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
             action TEXT NOT NULL,
             status TEXT NOT NULL CHECK(status IN ('success','error','warning')),
             message TEXT,

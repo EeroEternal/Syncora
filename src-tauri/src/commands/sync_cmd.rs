@@ -50,50 +50,14 @@ pub async fn trigger_sync(
 
 #[tauri::command]
 pub async fn trigger_sync_all(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let app_data_dir: PathBuf = app_handle.path()
-        .app_data_dir()
-        .map_err(|e| AppError::General(e.to_string()))?;
-
-    let db = state.db.clone();
-    let active_syncs = state.active_syncs.clone();
-    let api_url = state.api_base_url.clone();
-    let app_handle_clone = app_handle.clone();
-
-    tokio::task::spawn_blocking(move || {
-        let folders = {
-            let conn = db.lock().unwrap();
-            crate::db::folders::list_all(&conn)?
-        };
-
-        for folder in folders {
-            if folder.is_enabled && folder.mode != "cloud_only" {
-                // Dedup: if already running for this folder, skip
-                let already_running = {
-                    let map = active_syncs.lock().unwrap();
-                    map.contains_key(&folder.id)
-                };
-                if already_running {
-                    continue;
-                }
-                let _ = sync::sync_folder(
-                    &app_handle_clone,
-                    &active_syncs,
-                    &db,
-                    &app_data_dir,
-                    &api_url,
-                    &folder.id,
-                );
-            }
-        }
-        Ok::<(), AppError>(())
-    })
-    .await
-    .map_err(|e| AppError::General(e.to_string()))??;
-
-    let _ = app_handle.emit("sync-status-changed", "all");
+    // Trigger the scheduler's sync-all cycle via sync_notify, exactly
+    // like the tray menu "Sync All Now" does.  This ensures each folder
+    // sync runs via execute_sync() which emits per-folder
+    // "sync-status-changed" events so the frontend updates live.
+    state.sync_notify.notify_one();
     Ok(())
 }
 

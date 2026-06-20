@@ -65,12 +65,7 @@ export function Button(props: ButtonProps) {
         buttonBase,
         buttonSizes[size()],
         variant() === "ghost" ? buttonVariants.ghost : buttonVariants[variant()],
-        // Loading: swap to loading style + pulse.
-        // Use `cursor-progress` (not `cursor-wait`): on macOS, `cursor-wait` renders
-        // the rainbow beach-ball, which makes the app look frozen even though the
-        // backend call is just running normally. `cursor-progress` shows a small
-        // spinner next to the arrow — "working in background, UI still responsive".
-        isLoading() && cn(loadingStyles[variant()] || loadingStyles.primary, "cursor-progress"),
+        isLoading() && cn(loadingStyles[variant()] || loadingStyles.primary),
         // Disabled (not loading): standard dim
         local.disabled && !isLoading() && "opacity-50 cursor-not-allowed",
         local.class
@@ -105,8 +100,7 @@ export function IconButton(props: {
     <button
       class={cn(
         base,
-        // See note in `Button` above: avoid `cursor-wait` on macOS (beach-ball cursor).
-        props.loading && "cursor-progress bg-zinc-100",
+        props.loading && "bg-zinc-100",
         props.class
       )}
       title={props.title}

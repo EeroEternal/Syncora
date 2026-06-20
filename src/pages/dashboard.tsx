@@ -1,4 +1,4 @@
-import { createResource, Show, For, onMount, onCleanup } from "solid-js";
+import { createResource, createSignal, Show, For, onMount, onCleanup } from "solid-js";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -21,6 +21,22 @@ export default function Dashboard() {
     }).then((fn) => { unlisten = fn; });
     onCleanup(() => { unlisten?.(); });
   });
+
+  const [syncingAll, setSyncingAll] = createSignal(false);
+
+  const handleSyncAll = async () => {
+    if (syncingAll()) return;
+    setSyncingAll(true);
+    try {
+      await triggerSyncAll();
+    } catch (e: any) {
+      console.error("Sync All failed:", e?.message || e);
+    } finally {
+      // Brief cooldown to prevent rapid double-clicks; the actual sync
+      // progress is tracked via sync-status-changed events.
+      setTimeout(() => setSyncingAll(false), 1500);
+    }
+  };
 
   const stats = () => {
     const f = folders() || [];
@@ -45,10 +61,11 @@ export default function Dashboard() {
         <Button
           variant="primary"
           size="sm"
-          onClick={() => triggerSyncAll()}
+          onClick={handleSyncAll}
+          disabled={syncingAll()}
         >
           <Play class="w-3.5 h-3.5" />
-          Sync All
+          {syncingAll() ? "Syncing..." : "Sync All"}
         </Button>
       </div>
 
@@ -132,28 +149,26 @@ export default function Dashboard() {
                   };
 
                   return (
-                    <div class="flex items-start justify-between py-2.5 gap-3 first:pt-0 last:pb-0">
-                      <div class="flex items-start gap-2.5 min-w-0">
-                        <Badge
-                          variant={
-                            log.status === "success"
-                              ? "success"
-                              : log.status === "error"
-                              ? "error"
-                              : "warning"
-                          }
-                          class="shrink-0 mt-0.5"
-                        >
-                          {log.status}
-                        </Badge>
-                        <div class="min-w-0">
-                          <span class="text-sm font-medium text-zinc-800">{folderName()}</span>
-                          <Show when={log.message}>
-                            <p class="text-xs text-zinc-500 truncate mt-0.5">{log.message}</p>
-                          </Show>
-                        </div>
-                      </div>
-                      <span class="text-xs text-zinc-400 shrink-0 pt-0.5">
+                    <div class="flex items-center py-2.5 gap-3 first:pt-0 last:pb-0">
+                      <Badge
+                        variant={
+                          log.status === "success"
+                            ? "success"
+                            : log.status === "error"
+                            ? "error"
+                            : "warning"
+                        }
+                        class="shrink-0"
+                      >
+                        {log.status}
+                      </Badge>
+                      <span class="text-sm font-medium text-zinc-800 shrink-0 min-w-[80px] max-w-[140px] truncate">
+                        {folderName()}
+                      </span>
+                      <span class="text-xs text-zinc-500 flex-1 min-w-0 truncate">
+                        {log.message || "—"}
+                      </span>
+                      <span class="text-xs text-zinc-400 shrink-0">
                         {formatDateShort(log.timestamp)}
                       </span>
                     </div>

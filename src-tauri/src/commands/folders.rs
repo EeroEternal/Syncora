@@ -34,6 +34,55 @@ fn path_basename(path: &str) -> String {
         .to_string()
 }
 
+/// Open a local folder in the OS file explorer (Finder / Explorer / xdg-open).
+#[tauri::command]
+pub fn open_folder(path: String) -> Result<(), AppError> {
+    // Guard against empty or whitespace-only paths.
+    let path = path.trim();
+    if path.is_empty() {
+        return Err(AppError::General("Path is empty".into()));
+    }
+
+    log::info!("open_folder: requested path = '{}'", path);
+
+    let p = std::path::Path::new(path);
+    if !p.exists() {
+        log::warn!("open_folder: path does not exist: '{}'", path);
+        return Err(AppError::General(format!("Folder does not exist: {path}")));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Use the full path to avoid PATH issues in GUI-launched apps.
+        std::process::Command::new("/usr/bin/open")
+            .arg(path)
+            .status()
+            .map_err(|e| {
+                log::error!("open_folder: failed to execute /usr/bin/open: {}", e);
+                AppError::General(format!("Failed to open folder: {e}"))
+            })?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(path)
+            .spawn()
+            .map_err(|e| AppError::General(format!("Failed to open folder: {e}")))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| AppError::General(format!("Failed to open folder: {e}")))?;
+    }
+
+    log::info!("open_folder: successfully opened '{}'", path);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn list_folders(state: State<AppState>) -> Result<Vec<Folder>, AppError> {
     let conn = state.db.lock().unwrap();

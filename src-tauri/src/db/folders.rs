@@ -78,7 +78,7 @@ pub fn update_status(conn: &Connection, id: &str, status: &str) -> Result<(), Ap
 
 pub fn update_last_sync(conn: &Connection, id: &str) -> Result<(), AppError> {
     conn.execute(
-        "UPDATE folders SET last_sync_at = datetime('now'), status = 'synced', needs_resync = 0 WHERE id = ?1",
+        "UPDATE folders SET last_sync_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), status = 'synced', needs_resync = 0 WHERE id = ?1",
         params![id],
     )?;
     Ok(())

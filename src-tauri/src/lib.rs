@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use state::AppState;
 use tauri::{Manager, WindowEvent};
+use tauri_plugin_autostart::ManagerExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -30,6 +31,10 @@ pub fn run() {
                 .level(log::LevelFilter::Info)
                 .build(),
         )
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             // Initialize database
             let app_data_dir = app.path().app_data_dir()?;
@@ -53,6 +58,14 @@ pub fn run() {
                 api_base_url: api_base_url.clone(),
                 sync_notify: sync_notify.clone(),
             });
+
+            // Sync auto-start setting with OS
+            let autolaunch = app.autolaunch();
+            if settings.auto_start {
+                let _ = autolaunch.enable();
+            } else {
+                let _ = autolaunch.disable();
+            }
 
             // Set up system tray
             tray::setup_tray(app)?;
@@ -79,6 +92,7 @@ pub fn run() {
             commands::folders::list_folders,
             commands::folders::add_folder,
             commands::folders::delete_folder,
+            commands::folders::open_folder,
             commands::sync_cmd::trigger_sync,
             commands::sync_cmd::trigger_sync_all,
             commands::sync_cmd::cancel_sync,
@@ -89,21 +103,29 @@ pub fn run() {
             commands::logs::get_recent_activity,
         ])
         .on_window_event(|window, event| {
-            // On app exit, cancel all active rclone subprocesses so we don't leave orphans.
-            if matches!(event, WindowEvent::Destroyed | WindowEvent::CloseRequested { .. }) {
-                let state = window.state::<AppState>();
-                let active_syncs = state.active_syncs.clone();
-                let map = active_syncs.lock().unwrap();
-                for (folder_id, rs) in map.iter() {
-                    rs.cancel_requested.store(true, Ordering::SeqCst);
-                    let _ = rs.child.lock().map(|mut c| {
-                        if let Err(e) = c.kill() {
-                            if e.kind() != std::io::ErrorKind::InvalidInput {
-                                log::warn!("Failed to kill rclone for {} on exit: {}", folder_id, e);
-                            }
-                        }
-                    });
+            match event {
+                // Hide to tray instead of closing
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
                 }
+                // Kill all active rclone subprocesses on actual exit
+                WindowEvent::Destroyed => {
+                    let state = window.state::<AppState>();
+                    let active_syncs = state.active_syncs.clone();
+                    let map = active_syncs.lock().unwrap();
+                    for (folder_id, rs) in map.iter() {
+                        rs.cancel_requested.store(true, Ordering::SeqCst);
+                        let _ = rs.child.lock().map(|mut c| {
+                            if let Err(e) = c.kill() {
+                                if e.kind() != std::io::ErrorKind::InvalidInput {
+                                    log::warn!("Failed to kill rclone for {} on exit: {}", folder_id, e);
+                                }
+                            }
+                        });
+                    }
+                }
+                _ => {}
             }
         })
         .run(tauri::generate_context!())

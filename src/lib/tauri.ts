@@ -1,5 +1,30 @@
 import { invoke } from "@tauri-apps/api/core";
 
+// Auth error event — any invoke that gets a session-expired error
+// fires this so the App layout can redirect to /login.
+export const AUTH_EXPIRED_EVENT = "syncora:auth-expired";
+
+function isAuthError(err: unknown): boolean {
+  const msg = String((err as any)?.message ?? err ?? "");
+  return (
+    msg.includes("Session expired") ||
+    msg.includes("Authentication error") ||
+    msg.includes("Not logged in") ||
+    msg.includes("Unauthorized")
+  );
+}
+
+async function invokeAuth<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(cmd, args);
+  } catch (err) {
+    if (isAuthError(err)) {
+      window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+    }
+    throw err;
+  }
+}
+
 // Types
 export interface Folder {
   id: string;
@@ -78,24 +103,29 @@ export async function saveSettings(settings: Settings): Promise<void> {
 
 // Folder commands
 export async function listFolders(): Promise<Folder[]> {
-  return invoke("list_folders");
+  return invokeAuth("list_folders");
 }
 
 export async function addFolder(localPath: string, mode?: "create" | "connect" | "replace"): Promise<Folder> {
-  return invoke("add_folder", { localPath, mode });
+  return invokeAuth("add_folder", { localPath, mode });
 }
 
 export async function deleteFolder(id: string): Promise<void> {
-  return invoke("delete_folder", { id });
+  return invokeAuth("delete_folder", { id });
+}
+
+// Open a folder in the OS file explorer
+export async function openFolder(path: string): Promise<void> {
+  return invoke("open_folder", { path });
 }
 
 // Sync commands
 export async function triggerSync(folderId: string): Promise<void> {
-  return invoke("trigger_sync", { folderId });
+  return invokeAuth("trigger_sync", { folderId });
 }
 
 export async function triggerSyncAll(): Promise<void> {
-  return invoke("trigger_sync_all");
+  return invokeAuth("trigger_sync_all");
 }
 
 export async function cancelSync(folderId: string): Promise<void> {
@@ -104,26 +134,26 @@ export async function cancelSync(folderId: string): Promise<void> {
 
 // Conflict commands
 export async function listConflicts(resolved?: boolean): Promise<Conflict[]> {
-  return invoke("list_conflicts", { resolved });
+  return invokeAuth("list_conflicts", { resolved });
 }
 
 export async function resolveConflict(
   id: string,
   resolution: "keep_local" | "keep_remote" | "keep_both"
 ): Promise<void> {
-  return invoke("resolve_conflict", { id, resolution });
+  return invokeAuth("resolve_conflict", { id, resolution });
 }
 
 // Log commands
 export async function getLogs(folderId?: string, limit?: number): Promise<SyncLog[]> {
-  return invoke("get_logs", { folderId, limit });
+  return invokeAuth("get_logs", { folderId, limit });
 }
 
 export async function getRecentActivity(limit?: number): Promise<SyncLog[]> {
-  return invoke("get_recent_activity", { limit });
+  return invokeAuth("get_recent_activity", { limit });
 }
 
 // Release commands
 export async function releaseFolder(folderId: string): Promise<void> {
-  return invoke("release_folder", { folderId });
+  return invokeAuth("release_folder", { folderId });
 }

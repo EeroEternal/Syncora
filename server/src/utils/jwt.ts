@@ -14,8 +14,11 @@ export interface RefreshTokenRecord {
   expires_at: string;
 }
 
-const ACCESS_TOKEN_TTL = 15 * 60; // 15 minutes
-const REFRESH_TOKEN_TTL = 30 * 24 * 60 * 60; // 30 days
+// Desktop app token lifetimes — longer than typical web app for convenience.
+// Access token: 2 hours (reduces refresh frequency by 8x vs 15 min).
+// Refresh token: 90 days (user stays logged in for months between active sessions).
+const ACCESS_TOKEN_TTL = 2 * 60 * 60; // 2 hours
+const REFRESH_TOKEN_TTL = 90 * 24 * 60 * 60; // 90 days
 
 export async function createAccessToken(
   userId: string,

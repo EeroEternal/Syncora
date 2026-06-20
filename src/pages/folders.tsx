@@ -10,6 +10,8 @@ import {
   deleteFolder,
   releaseFolder,
   cancelSync,
+  triggerSync,
+  openFolder,
 } from "~/lib/tauri";
 import type { Folder } from "~/lib/tauri";
 import { formatDate, formatDateShort } from "~/lib/utils";
@@ -23,6 +25,7 @@ import {
   Check,
   X,
   Loader2,
+  ExternalLink,
 } from "lucide-solid";
 
 type ConflictKind = "server" | "local" | null;
@@ -34,6 +37,7 @@ export default function Folders() {
   const [loadingAction, setLoadingAction] = createSignal<string | null>(null);
   const [doneAction, setDoneAction] = createSignal<string | null>(null);
   const [error, setError] = createSignal("");
+  const [openError, setOpenError] = createSignal("");
   const [conflict, setConflict] = createSignal<ConflictKind>(null);
   const [syncingId, setSyncingId] = createSignal<string | null>(null);
 
@@ -137,7 +141,7 @@ export default function Folders() {
     }
 
     try {
-      await addFolder(path, mode);
+      const folder = await addFolder(path, mode);
       // Clear loading, show done feedback
       setLoadingAction(null);
       setDoneAction(mode);
@@ -147,6 +151,18 @@ export default function Folders() {
       setConflict(null);
       setShowDialog(false);
       refetch();
+      // Trigger immediate sync for the new folder.
+      // Don't silently swallow errors — show feedback so the user knows
+      // if the sync failed to start.
+      triggerSync(folder.id).catch((e: any) => {
+        const msg = e?.message || String(e) || "Failed to start sync";
+        console.error("triggerSync error after add:", msg);
+        setOpenError(`Sync failed to start: ${msg}`);
+        setTimeout(() => setOpenError(""), 5000);
+        refetch();
+      });
+      // Delayed refetch to pick up the "syncing" status set by the backend.
+      setTimeout(() => refetch(), 1000);
     } catch (e: any) {
       const msg = e?.message || String(e) || "Failed to add folder";
       if (msg.includes("already") || msg.includes("already exists")) {
@@ -180,6 +196,19 @@ export default function Folders() {
       refetch();
     } finally {
       setSyncingId(null);
+    }
+  };
+
+  const handleOpenFolder = async (path: string) => {
+    console.log("[Folders] openFolder clicked, path =", JSON.stringify(path));
+    try {
+      await openFolder(path);
+      console.log("[Folders] openFolder succeeded for", path);
+    } catch (e: any) {
+      const msg = e?.message || String(e) || "Failed to open folder";
+      console.error("openFolder error:", msg, "| path:", path);
+      setOpenError(msg);
+      setTimeout(() => setOpenError(""), 4000);
     }
   };
 
@@ -378,6 +407,13 @@ export default function Folders() {
         </Show>
       </Dialog>
 
+      {/* Open-folder error banner */}
+      <Show when={openError()}>
+        <div class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+          {openError()}
+        </div>
+      </Show>
+
       {/* Folder List */}
       <Show
         when={folders() && folders()!.length > 0}
@@ -487,6 +523,11 @@ export default function Folders() {
 
                   {/* Actions */}
                   <div class="flex items-center gap-1 justify-end">
+                    <IconButton
+                      icon={<ExternalLink class="w-3.5 h-3.5" />}
+                      title="Open folder"
+                      onClick={() => handleOpenFolder(folder.local_path)}
+                    />
                     <Show when={folder.mode !== "cloud_only"}>
                       <IconButton
                         icon={<CloudOff class="w-3.5 h-3.5" />}
