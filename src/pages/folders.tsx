@@ -426,7 +426,7 @@ export default function Folders() {
           </div>
         }
       >
-        <div class="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
+        <div class="hidden md:block bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
           {/* Table header */}
           <div class="grid grid-cols-[2fr_160px_90px_96px] items-center px-4 py-2 bg-zinc-50 border-b border-zinc-200">
             <div class="text-xs font-medium text-zinc-500 uppercase tracking-wide">Name</div>
@@ -550,6 +550,104 @@ export default function Folders() {
               )}
             </For>
           </div>
+        </div>
+
+        {/* Mobile card list */}
+        <div class="md:hidden space-y-3">
+          <For each={folders()}>
+            {(folder) => (
+              <div class="bg-white border border-zinc-200 rounded-lg p-4 space-y-3">
+                {/* Name + status */}
+                <div class="flex items-center justify-between gap-2">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-sm font-medium text-zinc-900 truncate">
+                        {getFolderName(folder.local_path)}
+                      </span>
+                      <Show when={folder.mode === "cloud_only"}>
+                        <span class="text-[10px] text-zinc-400 font-medium uppercase tracking-wide shrink-0">Cloud Only</span>
+                      </Show>
+                    </div>
+                    <div class="text-xs text-zinc-400 truncate mt-0.5">
+                      {getFolderDir(folder.local_path)}
+                    </div>
+                  </div>
+                  <Show
+                    when={folder.status === "syncing" && progress()[folder.id]}
+                    fallback={
+                      <Badge variant={statusVariant(folder.status)}>
+                        {folder.status}
+                      </Badge>
+                    }
+                  >
+                    {(() => {
+                      const p = () => progress()[folder.id];
+                      const pct = () => typeof p()?.percent === "number" ? p()!.percent! : null;
+                      const isCancelling = () => !!cancelling()[folder.id];
+                      return (
+                        <div class="flex items-center gap-1.5 shrink-0 w-28">
+                          <div class="flex-1 min-w-0">
+                            <div class="text-[10px] text-zinc-500 mb-0.5 truncate text-right">
+                              {pct() !== null ? `${pct()}%` : "..."}
+                            </div>
+                            <div class="h-1 w-full bg-zinc-100 rounded-full overflow-hidden">
+                              <div
+                                class="h-full bg-amber-500 transition-all"
+                                style={{ width: `${pct() ?? 0}%` }}
+                              />
+                            </div>
+                          </div>
+                          <button
+                            class="shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-200 text-zinc-500 hover:text-zinc-900 transition-colors disabled:opacity-50"
+                            title="Cancel sync"
+                            onClick={() => handleCancel(folder.id)}
+                            disabled={isCancelling()}
+                          >
+                            <Show
+                              when={isCancelling()}
+                              fallback={<X class="w-3 h-3" />}
+                            >
+                              <Loader2 class="w-3 h-3 animate-spin" />
+                            </Show>
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </Show>
+                </div>
+                {/* Last sync + actions */}
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-zinc-500">
+                    {formatDateShort(folder.last_sync_at)}
+                  </span>
+                  <div class="flex items-center gap-1">
+                    <IconButton
+                      icon={<ExternalLink class="w-3.5 h-3.5" />}
+                      title="Open folder"
+                      onClick={() => handleOpenFolder(folder.local_path)}
+                    />
+                    <Show when={folder.mode !== "cloud_only"}>
+                      <IconButton
+                        icon={<CloudOff class="w-3.5 h-3.5" />}
+                        title="Release local files"
+                        loading={syncingId() === `release:${folder.id}`}
+                        onClick={() => handleRelease(folder.id)}
+                        disabled={syncingId() !== null}
+                      />
+                    </Show>
+                    <IconButton
+                      icon={<Trash2 class="w-3.5 h-3.5" />}
+                      title="Remove folder"
+                      loading={syncingId() === `delete:${folder.id}`}
+                      onClick={() => handleDelete(folder.id)}
+                      danger
+                      disabled={syncingId() !== null}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </For>
         </div>
       </Show>
     </div>

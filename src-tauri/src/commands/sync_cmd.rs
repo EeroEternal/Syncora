@@ -1,4 +1,3 @@
-use std::sync::atomic::Ordering;
 use std::path::PathBuf;
 use tauri::{Emitter, Manager, State};
 use crate::error::AppError;
@@ -29,18 +28,15 @@ pub async fn trigger_sync(
     let app_handle_clone = app_handle.clone();
     let fid = folder_id.clone();
 
-    let result = tokio::task::spawn_blocking(move || {
-        sync::sync_folder(
-            &app_handle_clone,
-            &active_syncs,
-            &db,
-            &app_data_dir,
-            &api_base_url,
-            &fid,
-        )
-    })
-    .await
-    .map_err(|e| AppError::General(e.to_string()))?;
+    let result = sync::sync_folder_async(
+        app_handle_clone,
+        active_syncs,
+        db,
+        app_data_dir,
+        api_base_url,
+        fid,
+    )
+    .await;
 
     // Emit event for frontend
     let _ = app_handle.emit("sync-status-changed", &folder_id);
@@ -62,33 +58,20 @@ pub async fn trigger_sync_all(
 }
 
 /// Cancel a running sync for a given folder_id.
-/// Sets the cancel flag and immediately attempts to kill the rclone subprocess.
+/// Sets the cancel flag and (on desktop) kills the rclone subprocess.
 #[tauri::command]
 pub async fn cancel_sync(
     state: State<'_, AppState>,
     folder_id: String,
 ) -> Result<(), AppError> {
-    let (cancel_flag, child) = {
+    {
         let map = state.active_syncs.lock().unwrap();
         match map.get(&folder_id) {
-            Some(rs) => (rs.cancel_requested.clone(), rs.child.clone()),
+            Some(rs) => rs.cancel(),
             None => {
                 return Err(AppError::General(format!(
                     "No active sync for folder {}", folder_id
                 )));
-            }
-        }
-    };
-
-    // Signal the running task to stop
-    cancel_flag.store(true, Ordering::SeqCst);
-    // Also attempt to kill the child directly for faster termination
-    {
-        let mut child_guard = child.lock().unwrap();
-        if let Err(e) = child_guard.kill() {
-            // InvalidInput just means the child already exited — ignore
-            if e.kind() != std::io::ErrorKind::InvalidInput {
-                log::warn!("Failed to kill rclone subprocess for {}: {}", folder_id, e);
             }
         }
     }
@@ -97,6 +80,8 @@ pub async fn cancel_sync(
     Ok(())
 }
 
+/// Release a folder's remote (desktop-only — uses rclone subprocess).
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
 pub async fn release_folder(
     app_handle: tauri::AppHandle,
@@ -129,4 +114,15 @@ pub async fn release_folder(
 
     let _ = app_handle.emit("sync-status-changed", &folder_id);
     Ok(())
+}
+
+/// Release folder stub (Android — not applicable on mobile).
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub async fn release_folder(
+    _app_handle: tauri::AppHandle,
+    _state: State<'_, AppState>,
+    _folder_id: String,
+) -> Result<(), AppError> {
+    Err(AppError::General("Release folder is not supported on Android".into()))
 }

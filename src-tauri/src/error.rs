@@ -11,6 +11,9 @@ pub enum AppError {
     #[error("Rclone error: {0}")]
     Rclone(String),
 
+    #[error("S3 error: {0}")]
+    S3(String),
+
     #[error("Configuration error: {0}")]
     Config(String),
 

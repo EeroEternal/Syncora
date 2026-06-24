@@ -1,4 +1,3 @@
-use std::sync::atomic::Ordering;
 use tauri::State;
 use crate::auth;
 use crate::auth::client::FolderMode;
@@ -35,6 +34,7 @@ fn path_basename(path: &str) -> String {
 }
 
 /// Open a local folder in the OS file explorer (Finder / Explorer / xdg-open).
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
 pub fn open_folder(path: String) -> Result<(), AppError> {
     // Guard against empty or whitespace-only paths.
@@ -81,6 +81,13 @@ pub fn open_folder(path: String) -> Result<(), AppError> {
 
     log::info!("open_folder: successfully opened '{}'", path);
     Ok(())
+}
+
+/// Stub for open_folder on Android (not applicable — mobile uses SAF).
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub fn open_folder(_path: String) -> Result<(), AppError> {
+    Err(AppError::General("Opening folders is not supported on Android".into()))
 }
 
 #[tauri::command]
@@ -160,25 +167,18 @@ pub async fn delete_folder(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), AppError> {
-    // 1. Stop any in-flight sync for this folder and wait for the subprocess to exit.
-    let child_to_wait = {
+    // 1. Stop any in-flight sync for this folder.
+    //    On desktop, also wait for the rclone subprocess to exit.
+    {
         let mut map = state.active_syncs.lock().unwrap();
         if let Some(rs) = map.remove(&id) {
-            rs.cancel_requested.store(true, Ordering::SeqCst);
-            let mut child = rs.child.lock().unwrap();
-            if let Err(e) = child.kill() {
-                if e.kind() != std::io::ErrorKind::InvalidInput {
-                    log::warn!("delete_folder: kill failed for {}: {}", id, e);
-                }
+            rs.cancel();
+            #[cfg(not(target_os = "android"))]
+            {
+                let mut child = rs.child.lock().unwrap();
+                let _ = child.wait();
             }
-            Some(rs.child.clone())
-        } else {
-            None
         }
-    };
-    if let Some(child) = child_to_wait {
-        let mut child = child.lock().unwrap();
-        let _ = child.wait();
     }
 
     // 2. Delete remote record then local DB row.

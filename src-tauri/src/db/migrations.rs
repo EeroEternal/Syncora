@@ -46,6 +46,17 @@ pub fn run(conn: &Connection) -> Result<(), AppError> {
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS sync_state (
+            folder_id TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            etag TEXT,
+            size INTEGER,
+            local_mtime INTEGER,
+            side TEXT NOT NULL DEFAULT 'both',
+            last_seen TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+            PRIMARY KEY (folder_id, file_path)
+        );
         "
     )?;
     Ok(())

@@ -122,8 +122,8 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Application */}
-      <Card>
+      {/* Application (desktop-only settings) */}
+      <Card class="hidden md:block">
         <CardHeader>
           <CardTitle>Application</CardTitle>
           <CardDescription>App behavior preferences</CardDescription>

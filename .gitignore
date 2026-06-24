@@ -26,3 +26,5 @@ Thumbs.db
 
 # rclone binary (downloaded per-platform)
 src-tauri/binaries/
+Syncora-v0.3.0-android.apk
+*.apk

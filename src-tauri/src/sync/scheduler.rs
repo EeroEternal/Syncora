@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(not(target_os = "android"))]
 use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
 use tokio::sync::{mpsc, Notify};
 use tauri::{AppHandle, Emitter};
@@ -37,7 +38,8 @@ pub fn start(
     // Channel for sync triggers from watcher/poller → executor
     let (tx, rx) = mpsc::unbounded_channel::<SyncTrigger>();
 
-    // Spawn file watcher thread
+    // Spawn file watcher thread (desktop-only — Android uses remote polling)
+    #[cfg(not(target_os = "android"))]
     start_file_watcher(db.clone(), tx.clone());
 
     // Spawn remote poller task
@@ -58,6 +60,7 @@ pub fn start(
 
 /// File watcher: uses `notify` to watch all registered local folders.
 /// Sends folder IDs to the sync channel when files change (debounced 3s).
+#[cfg(not(target_os = "android"))]
 fn start_file_watcher(
     db: Arc<Mutex<Connection>>,
     tx: mpsc::UnboundedSender<SyncTrigger>,
@@ -305,8 +308,6 @@ async fn execute_sync(
     folder_id: &str,
 ) {
     // Dedup: if this folder already has a running sync, skip it.
-    // (Note: active_syncs entries are removed when the sync finishes,
-    //  so presence alone is a sufficient "already syncing" indicator.)
     {
         let map = active_syncs.lock().unwrap();
         if map.contains_key(folder_id) {
@@ -315,6 +316,18 @@ async fn execute_sync(
         }
     }
 
+    // Get folder name for foreground service notification (Android)
+    let folder_name = {
+        let conn = db.lock().unwrap();
+        db::folders::get_by_id(&conn, folder_id)
+            .ok()
+            .map(|f| f.local_path)
+            .unwrap_or_else(|| folder_id.to_string())
+    };
+
+    // Start foreground service on Android (no-op on desktop)
+    crate::foreground_service::start_foreground(&folder_name);
+
     let db_clone = db.clone();
     let app_data_dir = app_data_dir.to_path_buf();
     let api_url = api_base_url.to_string();
@@ -322,32 +335,30 @@ async fn execute_sync(
     let app_handle_clone = app_handle.clone();
     let fid = folder_id.to_string();
 
-    let result = tokio::task::spawn_blocking(move || {
-        sync::sync_folder(
-            &app_handle_clone,
-            &active_syncs_clone,
-            &db_clone,
-            &app_data_dir,
-            &api_url,
-            &fid,
-        )
-    })
+    let result = sync::sync_folder_async(
+        app_handle_clone,
+        active_syncs_clone,
+        db_clone,
+        app_data_dir,
+        api_url,
+        fid,
+    )
     .await;
 
+    // Stop foreground service on Android (no-op on desktop)
+    crate::foreground_service::stop_foreground();
+
     match result {
-        Ok(Ok(sync_result)) => {
+        Ok(sync_result) => {
             if sync_result.success {
                 info!("Scheduler: synced folder {} successfully", folder_id);
             } else {
-                warn!("Scheduler: bisync reported failure for folder {} (errors: {:?})",
+                warn!("Scheduler: sync reported failure for folder {} (errors: {:?})",
                     folder_id, sync_result.errors);
             }
         }
-        Ok(Err(e)) => {
-            error!("Scheduler: sync error for folder {}: {}", folder_id, e);
-        }
         Err(e) => {
-            error!("Scheduler: task join error for folder {}: {}", folder_id, e);
+            error!("Scheduler: sync error for folder {}: {}", folder_id, e);
         }
     }
 

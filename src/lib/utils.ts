@@ -34,3 +34,7 @@ export function formatDuration(ms: number): string {
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
 }
+
+export function isMobile(): boolean {
+  return window.matchMedia("(max-width: 768px)").matches;
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/android-schema.json",
+  "identifier": "android",
+  "description": "Android-specific capabilities",
+  "windows": ["main"],
+  "platforms": ["android"],
+  "permissions": [
+    "dialog:default"
+  ]
+}

@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering;
-
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -31,19 +29,12 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 state.sync_notify.notify_one();
             }
             "quit" => {
-                // Kill all active rclone subprocesses before exiting
+                // Cancel all active syncs before exiting
                 let state = app.state::<AppState>();
                 let active_syncs = state.active_syncs.clone();
                 let map = active_syncs.lock().unwrap();
-                for (folder_id, rs) in map.iter() {
-                    rs.cancel_requested.store(true, Ordering::SeqCst);
-                    let _ = rs.child.lock().map(|mut c| {
-                        if let Err(e) = c.kill() {
-                            if e.kind() != std::io::ErrorKind::InvalidInput {
-                                log::warn!("Failed to kill rclone for {} on quit: {}", folder_id, e);
-                            }
-                        }
-                    });
+                for (_folder_id, rs) in map.iter() {
+                    rs.cancel();
                 }
                 drop(map);
                 app.exit(0);

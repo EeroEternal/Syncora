@@ -70,7 +70,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats */}
-      <div class="grid grid-cols-4 gap-4 shrink-0">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
         <Card>
           <CardHeader class="pb-2">
             <CardTitle class="text-xs font-semibold uppercase tracking-wider text-zinc-500">

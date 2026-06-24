@@ -1,3 +1,5 @@
+// release module is desktop-only (uses rclone subprocess)
+#[cfg(not(target_os = "android"))]
 pub mod release;
 pub mod scheduler;
 
@@ -18,6 +20,7 @@ use rusqlite::Connection;
 /// 2. Plain `rclone` next to the executable
 /// 3. Walk up from executable to find `src-tauri/binaries/rclone-<triple>` (dev builds)
 /// 4. Fallback to `rclone` on PATH (warn, may be wrong version)
+#[cfg(not(target_os = "android"))]
 pub fn get_rclone_path(_app_handle: Option<&tauri::AppHandle>) -> PathBuf {
     let target_triple = std::env::consts::ARCH;
     let os = std::env::consts::OS;
@@ -69,10 +72,11 @@ pub fn get_rclone_path(_app_handle: Option<&tauri::AppHandle>) -> PathBuf {
     PathBuf::from(&plain_name)
 }
 
-/// Execute sync for a single folder.
+/// Execute sync for a single folder (desktop path — uses rclone bisync).
 /// The DB lock is held only during brief read/write operations;
 /// it is released before HTTP calls and rclone execution so the UI
 /// remains responsive while a sync is in progress.
+#[cfg(not(target_os = "android"))]
 pub fn sync_folder(
     app_handle: &tauri::AppHandle,
     active_syncs: &Arc<Mutex<HashMap<String, RunningSync>>>,
@@ -235,4 +239,44 @@ pub fn sync_folder(
     }
 
     Ok(result)
+}
+
+/// Shared async entry point for folder sync.
+/// Branches by platform: desktop uses rclone subprocess, mobile uses S3 engine.
+pub async fn sync_folder_async(
+    app_handle: tauri::AppHandle,
+    active_syncs: Arc<Mutex<HashMap<String, RunningSync>>>,
+    db: Arc<Mutex<Connection>>,
+    app_data_dir: PathBuf,
+    api_base_url: String,
+    folder_id: String,
+) -> Result<rclone::SyncResult, AppError> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let app_handle = app_handle.clone();
+        tokio::task::spawn_blocking(move || {
+            sync_folder(
+                &app_handle,
+                &active_syncs,
+                &db,
+                &app_data_dir,
+                &api_base_url,
+                &folder_id,
+            )
+        })
+        .await
+        .map_err(|e| AppError::General(e.to_string()))?
+    }
+    #[cfg(target_os = "android")]
+    {
+        crate::s3sync::run_sync(
+            app_handle,
+            active_syncs,
+            db,
+            app_data_dir,
+            api_base_url,
+            folder_id,
+        )
+        .await
+    }
 }

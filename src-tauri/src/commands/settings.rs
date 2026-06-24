@@ -1,4 +1,5 @@
 use tauri::{AppHandle, State};
+#[cfg(not(target_os = "android"))]
 use tauri_plugin_autostart::ManagerExt;
 use crate::db;
 use crate::db::settings::Settings;
@@ -17,12 +18,15 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings)
     db::settings::save(&conn, &settings)?;
     drop(conn);
 
-    // Sync auto-start with OS
-    let autolaunch = app.autolaunch();
-    if settings.auto_start {
-        let _ = autolaunch.enable();
-    } else {
-        let _ = autolaunch.disable();
+    // Sync auto-start with OS (desktop-only)
+    #[cfg(not(target_os = "android"))]
+    {
+        let autolaunch = app.autolaunch();
+        if settings.auto_start {
+            let _ = autolaunch.enable();
+        } else {
+            let _ = autolaunch.disable();
+        }
     }
 
     Ok(())

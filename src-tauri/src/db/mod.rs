@@ -3,6 +3,7 @@ pub mod folders;
 pub mod conflicts;
 pub mod sync_logs;
 pub mod settings;
+pub mod sync_state;
 
 use rusqlite::Connection;
 use crate::error::AppError;
